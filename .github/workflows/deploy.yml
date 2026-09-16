@@ -1,0 +1,76 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  # -------------------------
+  # 1. INSTALL + TEST + BUILD
+  # -------------------------
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Install backend dependencies
+      - name: Install backend dependencies
+        working-directory: server
+        run: npm ci
+
+      # Run tests
+      - name: Run backend tests
+        working-directory: server
+        run: npm test
+
+      # Install frontend dependencies
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # Build frontend
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # Build Docker images
+      - name: Build Docker images
+        run: docker compose build
+
+
+  # -------------------------
+  # 2. DEPLOY TO EC2
+  # -------------------------
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          script: |
+            cd ~/cloud-practice
+
+            git pull origin main
+
+            docker compose down
+
+            docker compose build
+
+            docker compose up -d
+
+            docker compose ps
